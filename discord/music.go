@@ -5,62 +5,80 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
-func loadSong(musicDir string, songName string) error {
+func fuzzyFindSong(musicDir string, songName string) (string, error) {
+	fileMap := map[string]string{}
 
 	musicDir = musicDir + "/"
 	files, err := os.ReadDir(musicDir)
 	if err != nil {
 		log.Println("Error reading music musicDirectory :", err)
-		return err
+		return "", err
 	}
 
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
+		fileMap[file.Name()] = file.Name()
+	}
 
-		if file.Name() == songName {
-			file, err := os.Open(musicDir + file.Name())
+	fileNames := []string{}
+	for name := range fileMap {
+		fileNames = append(fileNames, name)
+	}
+
+	matches := fuzzy.Ranks{}
+	matches = fuzzy.RankFindNormalizedFold(songName, fileNames)
+	sort.Sort(matches)
+
+	song := (musicDir + matches[0].Target)
+
+	return song, nil
+}
+
+func loadSong(song string) error {
+
+	file, err := os.Open(song)
+	if err != nil {
+		log.Println("Error opening dca file :", err)
+		return err
+	}
+
+	var opuslen int16
+
+	for {
+		err = binary.Read(file, binary.LittleEndian, &opuslen)
+
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err := file.Close()
 			if err != nil {
-				log.Println("Error opening dca file :", err)
 				return err
 			}
-			var opuslen int16
-
-			for {
-				err = binary.Read(file, binary.LittleEndian, &opuslen)
-
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					err := file.Close()
-					if err != nil {
-						return err
-					}
-					return nil
-				}
-
-				if err != nil {
-					log.Println("Error reading from dca file :", err)
-					return err
-				}
-
-				InBuf := make([]byte, opuslen)
-				err = binary.Read(file, binary.LittleEndian, &InBuf)
-
-				if err != nil {
-					log.Println("Error reading from dca file :", err)
-					return err
-				}
-
-				buffer = append(buffer, InBuf)
-			}
+			return nil
 		}
+
+		if err != nil {
+			log.Println("Error reading from dca file :", err)
+			return err
+		}
+
+		InBuf := make([]byte, opuslen)
+		err = binary.Read(file, binary.LittleEndian, &InBuf)
+
+		if err != nil {
+			log.Println("Error reading from dca file :", err)
+			return err
+		}
+
+		buffer = append(buffer, InBuf)
 	}
-	return nil
 }
 
 func playSong(s *discordgo.Session, guildID, channelID string) (err error) {

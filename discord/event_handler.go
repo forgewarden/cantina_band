@@ -16,7 +16,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	err := loadSong(musicDir, "music.dca")
+	song, err := fuzzyFindSong(musicDir, "music")
+	if err != nil {
+		log.Println("Error finding song:", err)
+		return
+	}
+
+	err = loadSong(song)
 	if err != nil {
 		log.Fatal("error loading song,", err)
 	}
