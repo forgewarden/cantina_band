@@ -32,7 +32,6 @@ Stops the current song.
 
 ## TODO
 
-- Get channel ID from requesters current voice channel
 - Implement a song queue
 - The bot should handle the file conversion
 - Add docker file
