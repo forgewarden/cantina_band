@@ -9,7 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-
 var buffer = make([][]byte, 0)
 var musicDir string
 
@@ -20,7 +19,7 @@ func NewBot(token string, dir string) (*discordgo.Session, error) {
 	}
 
 	musicDir = dir
-	
+
 	dg.AddHandler(songRequest)
 	dg.AddHandler(stopRequest)
 
@@ -45,5 +44,3 @@ func Run(dg *discordgo.Session) {
 
 	dg.Close()
 }
-
-
