@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -27,7 +28,7 @@ func songRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	log.Println("user requested song:", songRequest)
 
-	song, err := fuzzyFindSong(musicDir, songRequest)
+	song, songName, err := fuzzyFindSong(musicDir, songRequest)
 	if err != nil {
 		log.Println("error finding song:", err)
 		return
@@ -38,7 +39,7 @@ func songRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
 		log.Fatal("error loading song,", err)
 	}
 
-	s.ChannelMessageSend(m.ChannelID, "Playing music...")
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing %s...", songName))
 
 	err = playSong(s, m.GuildID, "470784676831690762")
 	if err != nil {

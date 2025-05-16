@@ -7,26 +7,31 @@ import (
 	"os"
 	"sort"
 	"time"
+	"strings"
+	"path/filepath"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
-func fuzzyFindSong(musicDir string, songName string) (string, error) {
+func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	fileMap := map[string]string{}
 
 	musicDir = musicDir + "/"
 	files, err := os.ReadDir(musicDir)
 	if err != nil {
 		log.Println("Error reading music musicDirectory :", err)
-		return "", err
+		return "", "", err
 	}
 
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
-		fileMap[file.Name()] = file.Name()
+
+		extension := filepath.Ext(file.Name())
+		songName := strings.TrimSuffix(file.Name(), extension)
+		fileMap[file.Name()] = songName
 	}
 
 	fileNames := []string{}
@@ -40,7 +45,7 @@ func fuzzyFindSong(musicDir string, songName string) (string, error) {
 
 	song := (musicDir + matches[0].Target)
 
-	return song, nil
+	return song, fileMap[matches[0].Target], nil
 }
 
 func loadSong(song string) error {
