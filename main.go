@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
 	"flag"
-	"os"
 	"github.com/forgewarden/cantina_band/m/discord"
+	"log"
+	"os"
 )
 
 func main() {
@@ -19,7 +19,6 @@ func main() {
 	if *musicDir == "" {
 		log.Panic("no music directory provided")
 	}
-
 
 	bot, err := discord.NewBot(*token, *musicDir)
 	if err != nil {
@@ -37,4 +36,3 @@ func lookupEnvOrString(key, defaultValue string) string {
 	}
 	return defaultValue
 }
-

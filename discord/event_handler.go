@@ -7,18 +7,29 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func songRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
-	if !strings.HasPrefix(m.Content, "!play") {
+	prefix := "!play"
+
+	if !strings.HasPrefix(m.Content, prefix) {
 		return
 	}
 
-	song, err := fuzzyFindSong(musicDir, "music")
+	songRequest := strings.TrimSpace(m.Content[len(prefix):])
+	if songRequest == "" {
+		log.Println("no song was requested")
+		s.ChannelMessageSend(m.ChannelID, "No song was requested!!")
+		return
+	}
+
+	log.Println("user requested song:", songRequest)
+
+	song, err := fuzzyFindSong(musicDir, songRequest)
 	if err != nil {
-		log.Println("Error finding song:", err)
+		log.Println("error finding song:", err)
 		return
 	}
 
@@ -30,8 +41,26 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "Playing music...")
 
 	err = playSong(s, m.GuildID, "470784676831690762")
-		if err != nil {
-			log.Println("Error playing song:", err)
-		}
+	if err != nil {
+		log.Println("error playing song:", err)
+	}
+}
 
+func stopRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+
+	prefix := "!stop"
+
+	if !strings.HasPrefix(m.Content, prefix) {
+		return
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "Stopping music...")
+
+	err := stopPlaying(s, m.GuildID, "470784676831690762")
+	if err != nil {
+		log.Println("error stopping song:", err)
+	}
 }

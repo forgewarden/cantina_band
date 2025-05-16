@@ -104,3 +104,21 @@ func playSong(s *discordgo.Session, guildID, channelID string) (err error) {
 
 	return nil
 }
+
+func stopPlaying(s *discordgo.Session, guildID, channelID string) (err error) {
+
+	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(250 * time.Millisecond)
+
+	vc.Speaking(false)
+
+	time.Sleep(250 * time.Millisecond)
+
+	vc.Disconnect()
+
+	return nil
+}

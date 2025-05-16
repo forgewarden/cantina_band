@@ -21,7 +21,8 @@ func NewBot(token string, dir string) (*discordgo.Session, error) {
 
 	musicDir = dir
 	
-	dg.AddHandler(messageCreate)
+	dg.AddHandler(songRequest)
+	dg.AddHandler(stopRequest)
 
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
 
@@ -33,11 +34,11 @@ func Run(dg *discordgo.Session) {
 	if err != nil {
 		log.Fatal("error opening connection,", err)
 	}
-	log.Println("Connected to websocket")
+	log.Println("connected to websocket")
 
 	defer dg.Close()
 
-	log.Println("Bot is now running. Press CTRL-C to exit.")
+	log.Println("bot is now running")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
