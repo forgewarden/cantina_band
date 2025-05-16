@@ -36,12 +36,31 @@ func songRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	err = loadSong(song)
 	if err != nil {
-		log.Fatal("error loading song,", err)
+		log.Println("error loading song:", err)
+		return
 	}
 
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing %s...", songName))
 
-	err = playSong(s, m.GuildID, "470784676831690762")
+	guild, err := s.State.Guild(m.GuildID)
+	if err != nil {
+		log.Println("error finding guild:", err)
+		return
+	}
+
+	var channelId string
+
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == m.Author.ID {
+			if vs.ChannelID == "" {
+				log.Println("user is in a voice state but not a specific channel in guild")
+				return
+			}
+			channelId = vs.ChannelID
+		}
+	}
+
+	err = playSong(s, m.GuildID, channelId)
 	if err != nil {
 		log.Println("error playing song:", err)
 	}
@@ -60,7 +79,25 @@ func stopRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "Stopping music...")
 
-	err := stopPlaying(s, m.GuildID, "470784676831690762")
+	guild, err := s.State.Guild(m.GuildID)
+	if err != nil {
+		log.Println("error finding guild:", err)
+		return
+	}
+
+	var channelId string
+
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == m.Author.ID {
+			if vs.ChannelID == "" {
+				log.Println("user is in a voice state but not a specific channel in guild")
+				return
+			}
+			channelId = vs.ChannelID
+		}
+	}
+
+	err = stopPlaying(s, m.GuildID, channelId)
 	if err != nil {
 		log.Println("error stopping song:", err)
 	}
