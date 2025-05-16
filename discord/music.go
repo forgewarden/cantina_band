@@ -5,10 +5,10 @@ import (
 	"io"
 	"log"
 	"os"
-	"sort"
-	"time"
-	"strings"
 	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/lithammer/fuzzysearch/fuzzy"
