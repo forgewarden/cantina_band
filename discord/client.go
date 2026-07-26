@@ -11,6 +11,7 @@ import (
 
 var buffer = make([][]byte, 0)
 var musicDir string
+var voiceManager *VoiceManager
 
 func NewBot(token string, dir string) (*discordgo.Session, error) {
 	dg, err := discordgo.New("Bot " + token)
@@ -19,9 +20,13 @@ func NewBot(token string, dir string) (*discordgo.Session, error) {
 	}
 
 	musicDir = dir
+	voiceManager = NewVoiceManager()
 
-	dg.AddHandler(songRequest)
-	dg.AddHandler(stopRequest)
+	// Register all command handlers
+	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		// Handle all commands in one handler to check prefixes
+		handleCommands(s, m)
+	})
 
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
 
@@ -41,6 +46,12 @@ func Run(dg *discordgo.Session) {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
+
+	// Clean up all voice connections on shutdown
+	log.Println("Cleaning up voice connections...")
+	for guildID := range voiceManager.guilds {
+		voiceManager.Disconnect(dg, guildID, "")
+	}
 
 	dg.Close()
 }

@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/forgewarden/cantina_band/m/discord"
+	"github.com/forgewarden/cantina_band/discord"
 	"log"
 	"os"
 )
