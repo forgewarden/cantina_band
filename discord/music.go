@@ -2,15 +2,13 @@ package discord
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
@@ -18,45 +16,55 @@ func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	fileMap := map[string]string{}
 
 	musicDir = musicDir + "/"
+
 	files, err := os.ReadDir(musicDir)
 	if err != nil {
-		log.Println("Error reading music musicDirectory :", err)
 		return "", "", err
 	}
 
+	// Look for .dca files only
 	for _, file := range files {
-		if file.IsDir() {
-			continue
+		fileName := file.Name()
+		if !file.IsDir() && strings.HasSuffix(fileName, ".dca") {
+			fileKey := strings.TrimSuffix(fileName, ".dca")
+			fileMap[fileKey] = fileName
 		}
-
-		extension := filepath.Ext(file.Name())
-		songName := strings.TrimSuffix(file.Name(), extension)
-		fileMap[file.Name()] = songName
 	}
 
-	fileNames := []string{}
-	for name := range fileMap {
-		fileNames = append(fileNames, name)
+	if len(fileMap) == 0 {
+		return "", "", fmt.Errorf("no .dca files found in music directory")
 	}
 
-	matches := fuzzy.Ranks{}
-	matches = fuzzy.RankFindNormalizedFold(songName, fileNames)
+	keys := make([]string, 0, len(fileMap))
+	for k := range fileMap {
+		keys = append(keys, k)
+	}
+
+	matches := fuzzy.RankFindFold(songName, keys)
 	sort.Sort(matches)
 
-	song := (musicDir + matches[0].Target)
+	if len(matches) == 0 {
+		return "", "", fmt.Errorf("no matching song found")
+	}
 
-	return song, fileMap[matches[0].Target], nil
+	bestMatch := matches[0].Target
+	filePath := musicDir + fileMap[bestMatch]
+
+	return filePath, bestMatch, nil
 }
 
 func loadSong(song string) error {
-
 	file, err := os.Open(song)
 	if err != nil {
 		log.Println("Error opening dca file :", err)
 		return err
 	}
+	defer file.Close()
 
 	var opuslen int16
+
+	// Clear existing buffer
+	buffer = make([][]byte, 0)
 
 	for {
 		err = binary.Read(file, binary.LittleEndian, &opuslen)
@@ -86,44 +94,6 @@ func loadSong(song string) error {
 	}
 }
 
-func playSong(s *discordgo.Session, guildID, channelID string) (err error) {
 
-	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
-	if err != nil {
-		return err
-	}
 
-	time.Sleep(250 * time.Millisecond)
 
-	vc.Speaking(true)
-
-	for _, buff := range buffer {
-		vc.OpusSend <- buff
-	}
-
-	vc.Speaking(false)
-
-	time.Sleep(250 * time.Millisecond)
-
-	vc.Disconnect()
-
-	return nil
-}
-
-func stopPlaying(s *discordgo.Session, guildID, channelID string) (err error) {
-
-	vc, err := s.ChannelVoiceJoin(guildID, channelID, false, true)
-	if err != nil {
-		return err
-	}
-
-	time.Sleep(250 * time.Millisecond)
-
-	vc.Speaking(false)
-
-	time.Sleep(250 * time.Millisecond)
-
-	vc.Disconnect()
-
-	return nil
-}
