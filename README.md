@@ -1,6 +1,6 @@
 # Cantina Band
 
-Cantina Band is a Discord bot that streams music from your local library to voice channels.
+Cantina Band is a Discord bot that can stream music from a local library to your servers voice channels.
 
 ## Requirements
 
