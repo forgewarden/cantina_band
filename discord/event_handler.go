@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -33,21 +35,13 @@ func handleCommands(s *discordgo.Session, m *discordgo.MessageCreate) {
 func songRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	prefix := "!play"
 	songRequest := strings.TrimSpace(m.Content[len(prefix):])
-	
+
 	if songRequest == "" {
 		s.ChannelMessageSend(m.ChannelID, "No song was requested! Usage: !play <song name>")
 		return
 	}
 
 	log.Println("user requested song:", songRequest)
-
-	// Find the song
-	songPath, songName, err := fuzzyFindSong(musicDir, songRequest)
-	if err != nil {
-		log.Println("error finding song:", err)
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Could not find song: %s", songRequest))
-		return
-	}
 
 	// Get user's voice channel
 	guild, err := s.State.Guild(m.GuildID)
@@ -73,6 +67,27 @@ func songRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		s.ChannelMessageSend(m.ChannelID, "You need to be in a voice channel to play music!")
 		return
 	}
+	if voiceManager.IsPlaying(m.GuildID) && len(voiceManager.GetQueue(m.GuildID)) >= MaxQueueSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Queue is full (max %d songs)", MaxQueueSize))
+		return
+	}
+
+	// Resolve locally first. The optional downloader only runs for a genuine miss.
+	songPath, songName, err := fuzzyFindSong(musicDir, songRequest)
+	if errors.Is(err, ErrSongNotFound) && downloaderClient != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**%s** is not in the local library. Downloading it now...", songRequest))
+
+		filename, title, downloadErr := downloaderClient.Download(context.Background(), songRequest)
+		if downloadErr == nil {
+			songPath, songName, downloadErr = downloadedSong(musicDir, filename, title)
+		}
+		err = downloadErr
+	}
+	if err != nil {
+		log.Println("error resolving song:", err)
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Could not find song: %s", songRequest))
+		return
+	}
 
 	// Create song request
 	song := SongRequest{
@@ -83,30 +98,22 @@ func songRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		MessageChannelID: m.ChannelID,
 	}
 
-	// Check if already playing
-	if voiceManager.IsPlaying(m.GuildID) {
-		// Add to queue
-		position, err := voiceManager.QueueSong(m.GuildID, song)
-		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error adding to queue: %v", err))
-			return
-		}
-		s.ChannelMessageSend(m.ChannelID, 
+	position, started, err := voiceManager.SubmitSong(s, m.GuildID, song)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error playing song: %v", err))
+		return
+	}
+	if !started {
+		s.ChannelMessageSend(m.ChannelID,
 			fmt.Sprintf("Added **%s** to the queue (Position: %d)", songName, position))
 	} else {
-		// Play immediately
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Now playing: **%s**", songName))
-		err = voiceManager.PlaySong(s, m.GuildID, song)
-		if err != nil {
-			log.Println("error playing song:", err)
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error playing song: %v", err))
-		}
 	}
 }
 
 func stopRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	state, exists := voiceManager.GetGuildState(m.GuildID)
-	
+
 	if !exists || state.vc == nil {
 		s.ChannelMessageSend(m.ChannelID, "Bot is not currently in a voice channel!")
 		return
@@ -114,9 +121,9 @@ func stopRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Get queue count before clearing
 	queueCount := len(voiceManager.GetQueue(m.GuildID))
-	
+
 	if queueCount > 0 {
-		s.ChannelMessageSend(m.ChannelID, 
+		s.ChannelMessageSend(m.ChannelID,
 			fmt.Sprintf("Stopping music and clearing %d queued song(s)...", queueCount))
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "Stopping music...")
@@ -139,7 +146,7 @@ func skipRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(queue) == 0 {
 		s.ChannelMessageSend(m.ChannelID, "Skipping current song (no more songs in queue)")
 	} else {
-		s.ChannelMessageSend(m.ChannelID, 
+		s.ChannelMessageSend(m.ChannelID,
 			fmt.Sprintf("Skipping to next song: **%s**", queue[0].SongName))
 	}
 
@@ -152,11 +159,11 @@ func skipRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func queueRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	queue := voiceManager.GetQueue(m.GuildID)
-	
+
 	if len(queue) == 0 {
 		// Check if currently playing
 		if current, playing := voiceManager.GetCurrentSong(m.GuildID); playing {
-			s.ChannelMessageSend(m.ChannelID, 
+			s.ChannelMessageSend(m.ChannelID,
 				fmt.Sprintf("Currently playing: **%s**\nQueue is empty.", current.SongName))
 		} else {
 			s.ChannelMessageSend(m.ChannelID, "Queue is empty and no song is playing.")
@@ -166,12 +173,12 @@ func queueRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Build queue message
 	var message strings.Builder
-	
+
 	// Show current song if playing
 	if current, playing := voiceManager.GetCurrentSong(m.GuildID); playing {
 		message.WriteString(fmt.Sprintf("**Now Playing:** %s\n\n", current.SongName))
 	}
-	
+
 	message.WriteString("**Queue:**\n")
 	for i, song := range queue {
 		message.WriteString(fmt.Sprintf("%d. %s\n", i+1, song.SongName))
@@ -185,7 +192,7 @@ func queueRequestHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func nowPlayingHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	current, playing := voiceManager.GetCurrentSong(m.GuildID)
-	
+
 	if !playing {
 		s.ChannelMessageSend(m.ChannelID, "No song is currently playing.")
 		return
@@ -193,12 +200,11 @@ func nowPlayingHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	queueCount := len(voiceManager.GetQueue(m.GuildID))
 	if queueCount > 0 {
-		s.ChannelMessageSend(m.ChannelID, 
-			fmt.Sprintf("**Now Playing:** %s\n(%d song(s) in queue)", 
+		s.ChannelMessageSend(m.ChannelID,
+			fmt.Sprintf("**Now Playing:** %s\n(%d song(s) in queue)",
 				current.SongName, queueCount))
 	} else {
-		s.ChannelMessageSend(m.ChannelID, 
+		s.ChannelMessageSend(m.ChannelID,
 			fmt.Sprintf("**Now Playing:** %s", current.SongName))
 	}
 }
-

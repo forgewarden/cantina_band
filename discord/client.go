@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -9,11 +10,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var buffer = make([][]byte, 0)
 var musicDir string
 var voiceManager *VoiceManager
+var downloaderClient TrackDownloader
 
-func NewBot(token string, dir string) (*discordgo.Session, error) {
+type TrackDownloader interface {
+	Download(context.Context, string) (string, string, error)
+}
+
+func NewBot(token string, dir string, downloader TrackDownloader) (*discordgo.Session, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
@@ -21,6 +26,7 @@ func NewBot(token string, dir string) (*discordgo.Session, error) {
 
 	musicDir = dir
 	voiceManager = NewVoiceManager()
+	downloaderClient = downloader
 
 	// Register all command handlers
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
