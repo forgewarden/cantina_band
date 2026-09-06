@@ -1,4 +1,4 @@
-module github.com/forgewarden/cantina_band
+module github.com/forgewarden/cantina-band
 
 go 1.26.7
 
