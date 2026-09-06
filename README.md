@@ -4,9 +4,11 @@ Cantina Band is a Discord bot that can stream music from a local library to your
 
 ## Requirements
 
-- Go 1.24.2 or higher
+- Go 1.26.0 or higher
 - Discord Bot Token
 - DCA audio files (see conversion section below)
+
+The bot uses message-based commands, so enable **Message Content Intent** for the bot in the Discord Developer Portal under **Bot > Privileged Gateway Intents**.
 
 ## Installation
 
@@ -129,6 +131,7 @@ For optimal quality when creating DCA files:
 
 ## Acknowledgments
 
-- Built with [discordgo](https://github.com/bwmarrin/discordgo) (forked for E2EE support)
+- Built with [disgo](https://github.com/DisgoOrg/disgo)
+- Discord voice E2EE powered by [dave-go](https://github.com/thomas-vilte/dave-go)
 - DCA format by [bwmarrin](https://github.com/bwmarrin/dca)
 - Fuzzy search powered by [lithammer/fuzzysearch](https://github.com/lithammer/fuzzysearch)
