@@ -1,6 +1,10 @@
-.git
-.gitignore
-cantina_band
-test_music_files
-README.md
-LICENSE
+**
+!go.mod
+!go.sum
+!main.go
+!discord/
+!discord/*.go
+discord/*_test.go
+!downloader/
+!downloader/*.go
+downloader/*_test.go

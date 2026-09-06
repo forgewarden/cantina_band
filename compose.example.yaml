@@ -1,0 +1,27 @@
+services:
+  cantina-band:
+    image: ghcr.io/forgewarden/cantina_band:0.1.0
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.0
+    mem_limit: 256m
+    pids_limit: 100
+    stop_grace_period: 30s
+    environment:
+      TOKEN_FILE: /run/secrets/discord_token
+      MUSIC_DIR: /music
+    secrets:
+      - discord_token
+    volumes:
+      - type: bind
+        source: ${MUSIC_DIR:?set MUSIC_DIR}
+        target: /music
+        read_only: true
+
+secrets:
+  discord_token:
+    file: ${DISCORD_TOKEN_FILE:?set DISCORD_TOKEN_FILE}
