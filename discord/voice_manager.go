@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 const (
@@ -18,13 +20,13 @@ const (
 type SongRequest struct {
 	FilePath         string
 	SongName         string
-	RequestedBy      string
-	ChannelID        string
-	MessageChannelID string // Channel to send messages to
+	RequestedBy      snowflake.ID
+	ChannelID        snowflake.ID
+	MessageChannelID snowflake.ID // Channel to send messages to
 }
 
 type GuildVoiceState struct {
-	vc                  *discordgo.VoiceConnection
+	vc                  voice.Conn
 	isPlaying           bool
 	stopChan            chan struct{}
 	skipChan            chan struct{}
@@ -38,19 +40,19 @@ type GuildVoiceState struct {
 }
 
 type VoiceManager struct {
-	guilds map[string]*GuildVoiceState
+	guilds map[snowflake.ID]*GuildVoiceState
 	mu     sync.RWMutex
 }
 
 // NewVoiceManager creates a new voice manager instance
 func NewVoiceManager() *VoiceManager {
 	return &VoiceManager{
-		guilds: make(map[string]*GuildVoiceState),
+		guilds: make(map[snowflake.ID]*GuildVoiceState),
 	}
 }
 
 // GetOrCreateGuildState gets or creates a guild voice state
-func (vm *VoiceManager) GetOrCreateGuildState(guildID string) *GuildVoiceState {
+func (vm *VoiceManager) GetOrCreateGuildState(guildID snowflake.ID) *GuildVoiceState {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 
@@ -67,7 +69,7 @@ func (vm *VoiceManager) GetOrCreateGuildState(guildID string) *GuildVoiceState {
 }
 
 // GetGuildState gets guild state without creating
-func (vm *VoiceManager) GetGuildState(guildID string) (*GuildVoiceState, bool) {
+func (vm *VoiceManager) GetGuildState(guildID snowflake.ID) (*GuildVoiceState, bool) {
 	vm.mu.RLock()
 	defer vm.mu.RUnlock()
 	state, exists := vm.guilds[guildID]
@@ -75,7 +77,7 @@ func (vm *VoiceManager) GetGuildState(guildID string) (*GuildVoiceState, bool) {
 }
 
 // JoinChannel joins a voice channel
-func (vm *VoiceManager) JoinChannel(s *discordgo.Session, guildID, channelID string) error {
+func (vm *VoiceManager) JoinChannel(client *bot.Client, guildID, channelID snowflake.ID) error {
 	state := vm.GetOrCreateGuildState(guildID)
 
 	// If already connected to the same channel, reuse connection
@@ -84,7 +86,8 @@ func (vm *VoiceManager) JoinChannel(s *discordgo.Session, guildID, channelID str
 	}
 
 	ctx := context.Background()
-	vc, err := s.ChannelVoiceJoin(ctx, guildID, channelID, false, true)
+	vc := client.VoiceManager.CreateConn(guildID)
+	err := vc.Open(ctx, channelID, false, true)
 	if err != nil {
 		return fmt.Errorf("failed to join voice channel: %w", err)
 	}
@@ -97,7 +100,7 @@ func (vm *VoiceManager) JoinChannel(s *discordgo.Session, guildID, channelID str
 }
 
 // QueueSong adds a song to the queue
-func (vm *VoiceManager) QueueSong(guildID string, song SongRequest) (int, error) {
+func (vm *VoiceManager) QueueSong(guildID snowflake.ID, song SongRequest) (int, error) {
 	state := vm.GetOrCreateGuildState(guildID)
 
 	state.queueMutex.Lock()
@@ -112,7 +115,7 @@ func (vm *VoiceManager) QueueSong(guildID string, song SongRequest) (int, error)
 }
 
 // GetNextSong gets and removes the next song from queue
-func (vm *VoiceManager) GetNextSong(guildID string) (SongRequest, bool) {
+func (vm *VoiceManager) GetNextSong(guildID snowflake.ID) (SongRequest, bool) {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return SongRequest{}, false
@@ -131,7 +134,7 @@ func (vm *VoiceManager) GetNextSong(guildID string) (SongRequest, bool) {
 }
 
 // GetQueue returns a copy of the current queue
-func (vm *VoiceManager) GetQueue(guildID string) []SongRequest {
+func (vm *VoiceManager) GetQueue(guildID snowflake.ID) []SongRequest {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return []SongRequest{}
@@ -146,7 +149,7 @@ func (vm *VoiceManager) GetQueue(guildID string) []SongRequest {
 }
 
 // ClearQueue clears the queue for a guild
-func (vm *VoiceManager) ClearQueue(guildID string) int {
+func (vm *VoiceManager) ClearQueue(guildID snowflake.ID) int {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return 0
@@ -161,7 +164,7 @@ func (vm *VoiceManager) ClearQueue(guildID string) int {
 }
 
 // SubmitSong atomically decides whether to start a song or append it to the guild queue.
-func (vm *VoiceManager) SubmitSong(s *discordgo.Session, guildID string, song SongRequest) (int, bool, error) {
+func (vm *VoiceManager) SubmitSong(client *bot.Client, guildID snowflake.ID, song SongRequest) (int, bool, error) {
 	state := vm.GetOrCreateGuildState(guildID)
 	state.admissionMutex.Lock()
 	defer state.admissionMutex.Unlock()
@@ -170,14 +173,14 @@ func (vm *VoiceManager) SubmitSong(s *discordgo.Session, guildID string, song So
 		position, err := vm.QueueSong(guildID, song)
 		return position, false, err
 	}
-	if err := vm.PlaySong(s, guildID, song); err != nil {
+	if err := vm.PlaySong(client, guildID, song); err != nil {
 		return 0, false, err
 	}
 	return 0, true, nil
 }
 
 // PlaySong starts playing a song
-func (vm *VoiceManager) PlaySong(s *discordgo.Session, guildID string, song SongRequest) error {
+func (vm *VoiceManager) PlaySong(client *bot.Client, guildID snowflake.ID, song SongRequest) error {
 	state := vm.GetOrCreateGuildState(guildID)
 
 	// Cancel any disconnect timer
@@ -185,7 +188,7 @@ func (vm *VoiceManager) PlaySong(s *discordgo.Session, guildID string, song Song
 
 	// Join channel if not connected
 	if state.vc == nil {
-		err := vm.JoinChannel(s, guildID, song.ChannelID)
+		err := vm.JoinChannel(client, guildID, song.ChannelID)
 		if err != nil {
 			return err
 		}
@@ -199,13 +202,13 @@ func (vm *VoiceManager) PlaySong(s *discordgo.Session, guildID string, song Song
 	state.lastActivity = time.Now()
 
 	// Start playback in goroutine
-	go vm.playbackWorker(s, guildID, state, song)
+	go vm.playbackWorker(client, guildID, state, song)
 
 	return nil
 }
 
 // playbackWorker handles the actual audio streaming
-func (vm *VoiceManager) playbackWorker(s *discordgo.Session, guildID string, state *GuildVoiceState, song SongRequest) {
+func (vm *VoiceManager) playbackWorker(client *bot.Client, guildID snowflake.ID, state *GuildVoiceState, song SongRequest) {
 	defer func() {
 		state.admissionMutex.Lock()
 		defer state.admissionMutex.Unlock()
@@ -216,23 +219,23 @@ func (vm *VoiceManager) playbackWorker(s *discordgo.Session, guildID string, sta
 		// Process queue or start disconnect timer
 		if nextSong, hasNext := vm.GetNextSong(guildID); hasNext {
 			// Send message about next song
-			if song.MessageChannelID != "" {
-				s.ChannelMessageSend(song.MessageChannelID,
+			if song.MessageChannelID != 0 {
+				sendMessage(client, song.MessageChannelID,
 					fmt.Sprintf("Now playing: **%s**", nextSong.SongName))
 			}
 
 			// Play next song
-			err := vm.PlaySong(s, guildID, nextSong)
+			err := vm.PlaySong(client, guildID, nextSong)
 			if err != nil {
 				log.Printf("Error playing next song: %v", err)
-				if song.MessageChannelID != "" {
-					s.ChannelMessageSend(song.MessageChannelID,
+				if song.MessageChannelID != 0 {
+					sendMessage(client, song.MessageChannelID,
 						fmt.Sprintf("Error playing next song: %v", err))
 				}
 			}
 		} else {
 			// No more songs, start disconnect timer
-			vm.StartAutoDisconnectTimer(s, guildID, song.MessageChannelID)
+			vm.StartAutoDisconnectTimer(client, guildID, song.MessageChannelID)
 		}
 	}()
 
@@ -240,8 +243,8 @@ func (vm *VoiceManager) playbackWorker(s *discordgo.Session, guildID string, sta
 	audioBuffer, err := loadSong(song.FilePath)
 	if err != nil {
 		log.Printf("Error loading song %s: %v", song.SongName, err)
-		if song.MessageChannelID != "" {
-			s.ChannelMessageSend(song.MessageChannelID,
+		if song.MessageChannelID != 0 {
+			sendMessage(client, song.MessageChannelID,
 				fmt.Sprintf("Failed to load **%s**: %v", song.SongName, err))
 		}
 		return
@@ -251,8 +254,14 @@ func (vm *VoiceManager) playbackWorker(s *discordgo.Session, guildID string, sta
 	time.Sleep(250 * time.Millisecond)
 
 	// Start speaking
-	state.vc.Speaking(true)
-	defer state.vc.Speaking(false)
+	if err := state.vc.SetSpeaking(context.Background(), voice.SpeakingFlagMicrophone); err != nil {
+		log.Printf("Error setting speaking state: %v", err)
+	}
+	defer func() {
+		if err := state.vc.SetSpeaking(context.Background(), voice.SpeakingFlagNone); err != nil {
+			log.Printf("Error clearing speaking state: %v", err)
+		}
+	}()
 
 	// Stream audio with interrupt checking
 	interrupted := vm.streamAudioInterruptible(state.vc, audioBuffer, state.stopChan, state.skipChan)
@@ -266,7 +275,7 @@ func (vm *VoiceManager) playbackWorker(s *discordgo.Session, guildID string, sta
 }
 
 // streamAudioInterruptible streams audio with ability to interrupt
-func (vm *VoiceManager) streamAudioInterruptible(vc *discordgo.VoiceConnection,
+func (vm *VoiceManager) streamAudioInterruptible(vc voice.Conn,
 	audioBuffer [][]byte, stopChan, skipChan chan struct{}) bool {
 
 	// Create a ticker for precise 20ms frame timing
@@ -282,22 +291,10 @@ func (vm *VoiceManager) streamAudioInterruptible(vc *discordgo.VoiceConnection,
 		case <-skipChan:
 			// Skip was requested - move to next
 			return true
-		default:
-			// Wait for the next frame timing slot
-			<-frameTicker.C
-
-			// Try to send audio, with timeout
-			select {
-			case vc.OpusSend <- buff:
-				// Successfully sent - frame timing is handled by ticker
-			case <-stopChan:
+		case <-frameTicker.C:
+			if _, err := vc.UDP().Write(buff); err != nil {
+				log.Printf("Error sending audio frame: %v", err)
 				return true
-			case <-skipChan:
-				return true
-			case <-time.After(100 * time.Millisecond):
-				// Reduced timeout - if we can't send within 100ms, something's wrong
-				log.Println("Warning: Audio frame send delayed, possible network issue")
-				// Continue anyway to maintain timing
 			}
 		}
 	}
@@ -306,7 +303,7 @@ func (vm *VoiceManager) streamAudioInterruptible(vc *discordgo.VoiceConnection,
 }
 
 // StopPlayback stops current playback and clears queue
-func (vm *VoiceManager) StopPlayback(guildID string) error {
+func (vm *VoiceManager) StopPlayback(guildID snowflake.ID) error {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return fmt.Errorf("not connected to any voice channel")
@@ -325,13 +322,13 @@ func (vm *VoiceManager) StopPlayback(guildID string) error {
 	}
 
 	// Start disconnect timer
-	vm.StartAutoDisconnectTimer(nil, guildID, "")
+	vm.StartAutoDisconnectTimer(nil, guildID, 0)
 
 	return nil
 }
 
 // SkipSong skips the current song
-func (vm *VoiceManager) SkipSong(guildID string) error {
+func (vm *VoiceManager) SkipSong(guildID snowflake.ID) error {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return fmt.Errorf("not connected to any voice channel")
@@ -353,7 +350,7 @@ func (vm *VoiceManager) SkipSong(guildID string) error {
 }
 
 // StartAutoDisconnectTimer starts the auto-disconnect timer
-func (vm *VoiceManager) StartAutoDisconnectTimer(s *discordgo.Session, guildID string, messageChannelID string) {
+func (vm *VoiceManager) StartAutoDisconnectTimer(client *bot.Client, guildID snowflake.ID, messageChannelID snowflake.ID) {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return
@@ -368,19 +365,19 @@ func (vm *VoiceManager) StartAutoDisconnectTimer(s *discordgo.Session, guildID s
 	}
 
 	// Send notification if channel provided
-	if messageChannelID != "" && s != nil {
-		s.ChannelMessageSend(messageChannelID,
+	if messageChannelID != 0 && client != nil {
+		sendMessage(client, messageChannelID,
 			"No more songs in queue. Will disconnect in 30 seconds if no new songs are added.")
 	}
 
 	// Start new timer
 	state.autoDisconnectTimer = time.AfterFunc(AutoDisconnectDelay, func() {
-		vm.Disconnect(s, guildID, messageChannelID)
+		vm.Disconnect(client, guildID, messageChannelID)
 	})
 }
 
 // CancelAutoDisconnectTimer cancels the auto-disconnect timer
-func (vm *VoiceManager) CancelAutoDisconnectTimer(guildID string) {
+func (vm *VoiceManager) CancelAutoDisconnectTimer(guildID snowflake.ID) {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return
@@ -396,7 +393,7 @@ func (vm *VoiceManager) CancelAutoDisconnectTimer(guildID string) {
 }
 
 // Disconnect disconnects from voice and cleans up
-func (vm *VoiceManager) Disconnect(s *discordgo.Session, guildID string, messageChannelID string) {
+func (vm *VoiceManager) Disconnect(client *bot.Client, guildID snowflake.ID, messageChannelID snowflake.ID) {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 
@@ -413,7 +410,7 @@ func (vm *VoiceManager) Disconnect(s *discordgo.Session, guildID string, message
 	// Disconnect from voice
 	if state.vc != nil {
 		ctx := context.Background()
-		state.vc.Disconnect(ctx)
+		state.vc.Close(ctx)
 		state.vc = nil
 	}
 
@@ -424,13 +421,13 @@ func (vm *VoiceManager) Disconnect(s *discordgo.Session, guildID string, message
 	delete(vm.guilds, guildID)
 
 	// Send disconnection message if channel provided
-	if messageChannelID != "" && s != nil {
-		s.ChannelMessageSend(messageChannelID, "Disconnected from voice channel.")
+	if messageChannelID != 0 && client != nil {
+		sendMessage(client, messageChannelID, "Disconnected from voice channel.")
 	}
 }
 
 // GetCurrentSong returns the currently playing song
-func (vm *VoiceManager) GetCurrentSong(guildID string) (*SongRequest, bool) {
+func (vm *VoiceManager) GetCurrentSong(guildID snowflake.ID) (*SongRequest, bool) {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return nil, false
@@ -444,7 +441,7 @@ func (vm *VoiceManager) GetCurrentSong(guildID string) (*SongRequest, bool) {
 }
 
 // IsPlaying checks if a guild is currently playing
-func (vm *VoiceManager) IsPlaying(guildID string) bool {
+func (vm *VoiceManager) IsPlaying(guildID snowflake.ID) bool {
 	state, exists := vm.GetGuildState(guildID)
 	if !exists {
 		return false

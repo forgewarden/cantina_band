@@ -7,7 +7,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/cache"
+	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/voice"
+	"github.com/thomas-vilte/dave-go/session"
 )
 
 var musicDir string
@@ -18,46 +24,45 @@ type TrackDownloader interface {
 	Download(context.Context, string) (string, string, error)
 }
 
-func NewBot(token string, dir string, downloader TrackDownloader) (*discordgo.Session, error) {
-	dg, err := discordgo.New("Bot " + token)
-	if err != nil {
-		return nil, err
-	}
-
+func NewBot(token string, dir string, downloader TrackDownloader) (*bot.Client, error) {
 	musicDir = dir
 	voiceManager = NewVoiceManager()
 	downloaderClient = downloader
 
-	// Register all command handlers
-	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		// Handle all commands in one handler to check prefixes
-		handleCommands(s, m)
-	})
-
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
-
-	return dg, nil
+	return disgo.New(token,
+		bot.WithGatewayConfigOpts(gateway.WithIntents(
+			gateway.IntentGuilds,
+			gateway.IntentGuildMessages,
+			gateway.IntentGuildVoiceStates,
+			gateway.IntentMessageContent,
+		)),
+		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagVoiceStates)),
+		bot.WithEventManagerConfigOpts(
+			bot.WithAsyncEventsEnabled(),
+			bot.WithListenerFunc(func(event *events.MessageCreate) {
+				handleCommands(event.Client(), event)
+			}),
+		),
+		bot.WithVoiceManagerConfigOpts(
+			voice.WithDaveSessionCreateFunc(session.CreateFunc()),
+		),
+	)
 }
 
-func Run(dg *discordgo.Session) {
-	err := dg.Open()
+func Run(client *bot.Client) {
+	ctx := context.Background()
+	err := client.OpenGateway(ctx)
 	if err != nil {
 		log.Fatal("error opening connection,", err)
 	}
 	log.Println("connected to websocket")
 
-	defer dg.Close()
-
 	log.Println("bot is now running")
 	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+	signal.Stop(sc)
 
-	// Clean up all voice connections on shutdown
-	log.Println("Cleaning up voice connections...")
-	for guildID := range voiceManager.guilds {
-		voiceManager.Disconnect(dg, guildID, "")
-	}
-
-	dg.Close()
+	log.Println("cleaning up Discord connections...")
+	client.Close(ctx)
 }
