@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/forgewarden/cantina_band/discord"
@@ -11,7 +13,11 @@ import (
 )
 
 func main() {
-	token := flag.String("token", lookupEnvOrString("TOKEN", ""), "Discord bot token")
+	tokenDefault, err := lookupToken()
+	if err != nil {
+		log.Fatal(err)
+	}
+	token := flag.String("token", tokenDefault, "Discord bot token")
 	musicDir := flag.String("music-dir", lookupEnvOrString("MUSIC_DIR", ""), "Directory containing music files")
 	downloaderURL := flag.String("downloader-url", lookupEnvOrString("DOWNLOADER_URL", ""), "Optional URL for the missing-track downloader service")
 	downloaderTimeoutValue := flag.String("downloader-timeout", lookupEnvOrString("DOWNLOADER_TIMEOUT", "20m"), "Timeout for remote track resolution and download")
@@ -41,6 +47,23 @@ func main() {
 	log.Println("bot created")
 
 	discord.Run(bot)
+}
+
+func lookupToken() (string, error) {
+	if token, ok := os.LookupEnv("TOKEN"); ok {
+		return token, nil
+	}
+
+	tokenFile, ok := os.LookupEnv("TOKEN_FILE")
+	if !ok {
+		return "", nil
+	}
+
+	token, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return "", fmt.Errorf("read token file: %w", err)
+	}
+	return strings.TrimSpace(string(token)), nil
 }
 
 func lookupEnvOrString(key, defaultValue string) string {
