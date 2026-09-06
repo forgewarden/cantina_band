@@ -106,12 +106,12 @@ jobs:
           dockerfile: Dockerfile
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Build OCI image
+      - name: Build image archive
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          outputs: type=oci,dest=${{ runner.temp }}/cantina-band-${{ matrix.suffix }}.tar
+          outputs: type=docker,name=cantina-band:scan-${{ matrix.suffix }},dest=${{ runner.temp }}/cantina-band-${{ matrix.suffix }}.tar
           provenance: false
           cache-from: type=gha,scope=container-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=container-${{ matrix.suffix }}
