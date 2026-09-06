@@ -74,6 +74,7 @@ Command-line flags take precedence over their corresponding environment variable
 | `-music-dir` | `MUSIC_DIR` | Required | Directory containing `.dca` files |
 | `-downloader-url` | `DOWNLOADER_URL` | Disabled | Base URL of an optional missing-track downloader |
 | `-downloader-timeout` | `DOWNLOADER_TIMEOUT` | `20m` | Timeout for downloader requests |
+| `-auto-disconnect-delay` | `AUTO_DISCONNECT_DELAY` | `30s` | Delay before disconnecting from an idle voice channel |
 
 The downloader is only contacted when no local track matches. It must publish the returned `.dca` file into the same music directory visible to Cantina Band; use a shared volume when the services run in separate containers.
 
@@ -149,7 +150,7 @@ The user running `!play` must be connected to a voice channel.
 | `!skip` | Skip the current song |
 | `!stop` | Stop playback and clear the queue |
 
-Queues hold up to 10 waiting tracks. The bot disconnects from voice 30 seconds after playback finishes if no new track is added.
+Queues hold up to 10 waiting tracks. By default, the bot disconnects from voice 30 seconds after playback finishes if no new track is added. Configure the delay with `-auto-disconnect-delay` or `AUTO_DISCONNECT_DELAY` using a positive Go duration such as `2m`.
 
 ## Prepare Music
 
