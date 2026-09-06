@@ -2,15 +2,19 @@ package discord
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
+
+var ErrSongNotFound = errors.New("song not found")
 
 func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	fileMap := map[string]string{}
@@ -32,7 +36,7 @@ func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	}
 
 	if len(fileMap) == 0 {
-		return "", "", fmt.Errorf("no .dca files found in music directory")
+		return "", "", fmt.Errorf("%w: no .dca files in music directory", ErrSongNotFound)
 	}
 
 	keys := make([]string, 0, len(fileMap))
@@ -44,7 +48,7 @@ func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	sort.Sort(matches)
 
 	if len(matches) == 0 {
-		return "", "", fmt.Errorf("no matching song found")
+		return "", "", ErrSongNotFound
 	}
 
 	bestMatch := matches[0].Target
@@ -53,33 +57,49 @@ func fuzzyFindSong(musicDir string, songName string) (string, string, error) {
 	return filePath, bestMatch, nil
 }
 
-func loadSong(song string) error {
+func downloadedSong(libraryDir, filename, title string) (string, string, error) {
+	if filename == "" || filepath.Base(filename) != filename || filepath.Ext(filename) != ".dca" {
+		return "", "", fmt.Errorf("downloader returned invalid filename %q", filename)
+	}
+
+	filePath := filepath.Join(libraryDir, filename)
+	info, err := os.Lstat(filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("downloaded song is unavailable: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", "", fmt.Errorf("downloaded song %q is not a regular file", filename)
+	}
+	if title == "" {
+		title = filename[:len(filename)-len(filepath.Ext(filename))]
+	}
+	return filePath, title, nil
+}
+
+func loadSong(song string) ([][]byte, error) {
 	file, err := os.Open(song)
 	if err != nil {
 		log.Println("Error opening dca file :", err)
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
-	var opuslen int16
-
-	// Clear existing buffer
-	buffer = make([][]byte, 0)
+	var opuslen uint16
+	buffer := make([][]byte, 0)
 
 	for {
 		err = binary.Read(file, binary.LittleEndian, &opuslen)
 
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			err := file.Close()
-			if err != nil {
-				return err
-			}
-			return nil
+			return buffer, nil
 		}
 
 		if err != nil {
 			log.Println("Error reading from dca file :", err)
-			return err
+			return nil, err
+		}
+		if opuslen == 0 || opuslen > 4096 {
+			return nil, fmt.Errorf("invalid Opus frame length %d", opuslen)
 		}
 
 		InBuf := make([]byte, opuslen)
@@ -87,13 +107,9 @@ func loadSong(song string) error {
 
 		if err != nil {
 			log.Println("Error reading from dca file :", err)
-			return err
+			return nil, err
 		}
 
 		buffer = append(buffer, InBuf)
 	}
 }
-
-
-
-
