@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLookupTokenPrefersEnvironment(t *testing.T) {
@@ -42,6 +43,22 @@ func TestLookupTokenReportsFileError(t *testing.T) {
 
 	if _, err := lookupToken(); err == nil {
 		t.Fatal("expected token file error")
+	}
+}
+
+func TestParsePositiveDuration(t *testing.T) {
+	duration, err := parsePositiveDuration("2m30s", "test duration")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duration != 2*time.Minute+30*time.Second {
+		t.Fatalf("unexpected duration %s", duration)
+	}
+
+	for _, value := range []string{"invalid", "0s", "-1s"} {
+		if _, err := parsePositiveDuration(value, "test duration"); err == nil {
+			t.Errorf("expected %q to be rejected", value)
+		}
 	}
 }
 

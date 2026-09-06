@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	MaxQueueSize        = 10
-	AutoDisconnectDelay = 30 * time.Second
+	MaxQueueSize = 10
 )
 
 type SongRequest struct {
@@ -40,14 +39,16 @@ type GuildVoiceState struct {
 }
 
 type VoiceManager struct {
-	guilds map[snowflake.ID]*GuildVoiceState
-	mu     sync.RWMutex
+	guilds              map[snowflake.ID]*GuildVoiceState
+	mu                  sync.RWMutex
+	autoDisconnectDelay time.Duration
 }
 
 // NewVoiceManager creates a new voice manager instance
-func NewVoiceManager() *VoiceManager {
+func NewVoiceManager(autoDisconnectDelay time.Duration) *VoiceManager {
 	return &VoiceManager{
-		guilds: make(map[snowflake.ID]*GuildVoiceState),
+		guilds:              make(map[snowflake.ID]*GuildVoiceState),
+		autoDisconnectDelay: autoDisconnectDelay,
 	}
 }
 
@@ -367,11 +368,11 @@ func (vm *VoiceManager) StartAutoDisconnectTimer(client *bot.Client, guildID sno
 	// Send notification if channel provided
 	if messageChannelID != 0 && client != nil {
 		sendMessage(client, messageChannelID,
-			"No more songs in queue. Will disconnect in 30 seconds if no new songs are added.")
+			fmt.Sprintf("No more songs in queue. Will disconnect in %s if no new songs are added.", vm.autoDisconnectDelay))
 	}
 
 	// Start new timer
-	state.autoDisconnectTimer = time.AfterFunc(AutoDisconnectDelay, func() {
+	state.autoDisconnectTimer = time.AfterFunc(vm.autoDisconnectDelay, func() {
 		vm.Disconnect(client, guildID, messageChannelID)
 	})
 }

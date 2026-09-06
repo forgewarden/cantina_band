@@ -21,6 +21,7 @@ func main() {
 	musicDir := flag.String("music-dir", lookupEnvOrString("MUSIC_DIR", ""), "Directory containing music files")
 	downloaderURL := flag.String("downloader-url", lookupEnvOrString("DOWNLOADER_URL", ""), "Optional URL for the missing-track downloader service")
 	downloaderTimeoutValue := flag.String("downloader-timeout", lookupEnvOrString("DOWNLOADER_TIMEOUT", "20m"), "Timeout for remote track resolution and download")
+	autoDisconnectDelayValue := flag.String("auto-disconnect-delay", lookupEnvOrString("AUTO_DISCONNECT_DELAY", "30s"), "Delay before disconnecting from an idle voice channel")
 	flag.Parse()
 
 	if *token == "" {
@@ -30,16 +31,20 @@ func main() {
 	if *musicDir == "" {
 		log.Panic("no music directory provided")
 	}
-	downloaderTimeout, err := time.ParseDuration(*downloaderTimeoutValue)
-	if err != nil || downloaderTimeout <= 0 {
-		log.Panic("invalid downloader timeout")
+	downloaderTimeout, err := parsePositiveDuration(*downloaderTimeoutValue, "downloader timeout")
+	if err != nil {
+		log.Panic(err)
+	}
+	autoDisconnectDelay, err := parsePositiveDuration(*autoDisconnectDelayValue, "auto-disconnect delay")
+	if err != nil {
+		log.Panic(err)
 	}
 	downloaderClient, err := downloader.NewClient(*downloaderURL, downloaderTimeout)
 	if err != nil {
 		log.Fatal("error creating downloader client,", err)
 	}
 
-	bot, err := discord.NewBot(*token, *musicDir, downloaderClient)
+	bot, err := discord.NewBot(*token, *musicDir, downloaderClient, autoDisconnectDelay)
 	if err != nil {
 		log.Fatal("error creating bot,", err)
 	}
@@ -71,4 +76,12 @@ func lookupEnvOrString(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parsePositiveDuration(value, name string) (time.Duration, error) {
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("invalid %s", name)
+	}
+	return duration, nil
 }

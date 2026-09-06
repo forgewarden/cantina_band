@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
@@ -24,9 +25,9 @@ type TrackDownloader interface {
 	Download(context.Context, string) (string, string, error)
 }
 
-func NewBot(token string, dir string, downloader TrackDownloader) (*bot.Client, error) {
+func NewBot(token string, dir string, downloader TrackDownloader, autoDisconnectDelay time.Duration) (*bot.Client, error) {
 	musicDir = dir
-	voiceManager = NewVoiceManager()
+	voiceManager = NewVoiceManager(autoDisconnectDelay)
 	downloaderClient = downloader
 
 	return disgo.New(token,
