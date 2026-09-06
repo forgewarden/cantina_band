@@ -13,16 +13,16 @@ In the [Discord Developer Portal](https://discord.com/developers/applications), 
 ## Run Locally
 
 ```bash
-git clone https://github.com/forgewarden/cantina_band.git
-cd cantina_band
-go build -o cantina_band .
-./cantina_band -token "<discord-bot-token>" -music-dir "/path/to/music"
+git clone https://github.com/forgewarden/cantina-band.git
+cd cantina-band
+go build -o cantina-band .
+./cantina-band -token "<discord-bot-token>" -music-dir "/path/to/music"
 ```
 
 The same settings can be supplied with environment variables:
 
 ```bash
-TOKEN="<discord-bot-token>" MUSIC_DIR="/path/to/music" ./cantina_band
+TOKEN="<discord-bot-token>" MUSIC_DIR="/path/to/music" ./cantina-band
 ```
 
 ## Run With Docker
@@ -30,7 +30,7 @@ TOKEN="<discord-bot-token>" MUSIC_DIR="/path/to/music" ./cantina_band
 Stable multi-architecture images for `linux/amd64` and `linux/arm64` are published to GitHub Container Registry. Use a version tag for routine deployments:
 
 ```bash
-docker pull ghcr.io/forgewarden/cantina_band:0.1.0
+docker pull ghcr.io/forgewarden/cantina-band:0.1.0
 
 docker run --detach \
   --name cantina-band \
@@ -44,7 +44,7 @@ docker run --detach \
   --mount type=bind,src="/path/to/discord-token",dst=/run/secrets/discord_token,readonly \
   --mount type=bind,src="/path/to/music",dst=/music,readonly \
   --env TOKEN_FILE=/run/secrets/discord_token \
-  ghcr.io/forgewarden/cantina_band:0.1.0
+  ghcr.io/forgewarden/cantina-band:0.1.0
 ```
 
 The image runs as non-root UID/GID `65532`. The token file and music directory must be readable by that identity. Protect the token file from other host users and never include it in an image or source repository. No inbound port is required.
@@ -94,9 +94,9 @@ Stable releases publish the following tags from an annotated `vMAJOR.MINOR.PATCH
 For reproducible deployments, resolve and record the release digest rather than relying on a mutable alias:
 
 ```bash
-IMAGE="ghcr.io/forgewarden/cantina_band:0.1.0"
+IMAGE="ghcr.io/forgewarden/cantina-band:0.1.0"
 DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')"
-docker pull "ghcr.io/forgewarden/cantina_band@${DIGEST}"
+docker pull "ghcr.io/forgewarden/cantina-band@${DIGEST}"
 ```
 
 Release manifests are signed keylessly by `.github/workflows/release.yml`. Verify the signature with [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
@@ -104,16 +104,16 @@ Release manifests are signed keylessly by `.github/workflows/release.yml`. Verif
 ```bash
 cosign verify \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  --certificate-identity-regexp "^https://github.com/forgewarden/cantina_band/.github/workflows/release.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$" \
-  "ghcr.io/forgewarden/cantina_band@${DIGEST}"
+  --certificate-identity-regexp "^https://github.com/forgewarden/cantina-band/.github/workflows/release.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$" \
+  "ghcr.io/forgewarden/cantina-band@${DIGEST}"
 ```
 
 Verify GitHub build provenance with the [GitHub CLI](https://cli.github.com/):
 
 ```bash
 gh attestation verify \
-  "oci://ghcr.io/forgewarden/cantina_band@${DIGEST}" \
-  --repo forgewarden/cantina_band
+  "oci://ghcr.io/forgewarden/cantina-band@${DIGEST}" \
+  --repo forgewarden/cantina-band
 ```
 
 Each platform image also includes an attached SBOM and maximum-mode BuildKit provenance.
@@ -135,7 +135,7 @@ Configure the repository before the first release:
 3. Create a protected GitHub environment named `release` with a required reviewer.
 4. Enable Dependabot alerts, secret scanning, push protection, private vulnerability reporting, and CodeQL.
 5. Create and push the first release with `git tag -a v0.1.0 -m "Release v0.1.0"` followed by `git push origin v0.1.0`.
-6. After the package is created, link it to this repository and set `ghcr.io/forgewarden/cantina_band` visibility to public.
+6. After the package is created, link it to this repository and set `ghcr.io/forgewarden/cantina-band` visibility to public.
 
 ## Commands
 

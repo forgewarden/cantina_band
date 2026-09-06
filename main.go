@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgewarden/cantina_band/discord"
-	"github.com/forgewarden/cantina_band/downloader"
+	"github.com/forgewarden/cantina-band/discord"
+	"github.com/forgewarden/cantina-band/downloader"
 )
 
 func main() {

@@ -6,7 +6,7 @@ Only the latest stable release receives security updates. Deployments should use
 
 ## Reporting a Vulnerability
 
-Do not report suspected vulnerabilities in a public issue. Use [GitHub private vulnerability reporting](https://github.com/forgewarden/cantina_band/security/advisories/new) and include:
+Do not report suspected vulnerabilities in a public issue. Use [GitHub private vulnerability reporting](https://github.com/forgewarden/cantina-band/security/advisories/new) and include:
 
 - The affected version or image digest
 - Steps to reproduce the issue
@@ -18,6 +18,6 @@ You should receive an acknowledgement within seven days. Confirmed vulnerabiliti
 
 ## Release Artifacts
 
-Official container images are published at `ghcr.io/forgewarden/cantina_band`. Stable images are signed using GitHub Actions workload identity and include build-provenance and SBOM attestations.
+Official container images are published at `ghcr.io/forgewarden/cantina-band`. Stable images are signed using GitHub Actions workload identity and include build-provenance and SBOM attestations.
 
 Security exceptions must identify the relevant vulnerability, explain the impact assessment, name an owner, and include an expiry date.

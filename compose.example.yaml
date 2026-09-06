@@ -1,6 +1,6 @@
 services:
   cantina-band:
-    image: ghcr.io/forgewarden/cantina_band:0.1.0
+    image: ghcr.io/forgewarden/cantina-band:0.1.0
     restart: unless-stopped
     read_only: true
     cap_drop:

@@ -11,7 +11,7 @@ COPY downloader ./downloader
 ARG TARGETOS
 ARG TARGETARCH
 RUN --network=none CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w" -o /out/cantina_band .
+    go build -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w" -o /out/cantina-band .
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 WORKDIR /app
@@ -21,17 +21,17 @@ ARG REVISION=unknown
 ARG CREATED=1970-01-01T00:00:00Z
 LABEL org.opencontainers.image.title="Cantina Band" \
       org.opencontainers.image.description="Self-hosted Discord music bot for pre-encoded DCA audio" \
-      org.opencontainers.image.source="https://github.com/forgewarden/cantina_band" \
-      org.opencontainers.image.url="https://github.com/forgewarden/cantina_band" \
-      org.opencontainers.image.documentation="https://github.com/forgewarden/cantina_band#readme" \
+      org.opencontainers.image.source="https://github.com/forgewarden/cantina-band" \
+      org.opencontainers.image.url="https://github.com/forgewarden/cantina-band" \
+      org.opencontainers.image.documentation="https://github.com/forgewarden/cantina-band#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION \
       org.opencontainers.image.created=$CREATED
 
-COPY --from=builder --chown=nonroot:nonroot --chmod=0555 /out/cantina_band /app/cantina_band
+COPY --from=builder --chown=nonroot:nonroot --chmod=0555 /out/cantina-band /app/cantina-band
 
 ENV MUSIC_DIR=/music
 
 USER nonroot:nonroot
-ENTRYPOINT ["/app/cantina_band"]
+ENTRYPOINT ["/app/cantina-band"]
